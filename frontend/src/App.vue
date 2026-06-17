@@ -78,14 +78,36 @@
     </div>
 
     <!-- Reference -->
-    <div v-if="activeTab === 'ref'" class="bg-gray-900 rounded-xl p-4">
-      <h3 class="text-purple-300 font-bold mb-3">盲文速查表</h3>
-      <div class="grid grid-cols-6 md:grid-cols-9 gap-3">
-        <div v-for="(dots, char) in brailleMap" :key="char" class="flex flex-col items-center">
-          <div class="text-xl font-bold text-purple-400">{{ char }}</div>
-          <BrailleCell :dots="dots" :size="30" />
-          <div class="text-xs text-gray-500">{{ dots.join(',') }}</div>
+    <div v-if="activeTab === 'ref'" class="bg-gray-900 rounded-xl p-4 flex gap-4 relative">
+      <div class="flex-1">
+        <h3 class="text-purple-300 font-bold mb-3">盲文速查表</h3>
+        <div ref="scrollContainer" class="h-[600px] overflow-y-auto pr-2 scroll-smooth" @scroll="onScroll">
+          <div v-for="group in brailleGroups" :key="group.id" :id="'group-' + group.id" class="mb-6">
+            <div class="sticky top-0 z-10 bg-gray-900 py-2 border-b border-purple-500/30 mb-3 transition-all"
+              :class="activeGroup === group.id ? 'bg-purple-900/40 border-b-2 border-purple-500' : ''">
+              <h4 class="text-lg font-bold" :class="activeGroup === group.id ? 'text-purple-300' : 'text-gray-300'">
+                {{ group.label }}
+              </h4>
+            </div>
+            <div class="grid grid-cols-5 md:grid-cols-8 lg:grid-cols-10 gap-3">
+              <div v-for="char in group.chars" :key="char" class="flex flex-col items-center p-2 rounded-lg transition-all"
+                :class="activeGroup === group.id ? 'bg-purple-900/20' : 'bg-gray-800/50'">
+                <div class="text-xl font-bold text-purple-400">{{ char }}</div>
+                <BrailleCell :dots="brailleMap[char]" :size="30" />
+                <div class="text-xs text-gray-500">{{ brailleMap[char].join(',') }}</div>
+              </div>
+            </div>
+          </div>
         </div>
+      </div>
+      <div class="flex flex-col gap-1 sticky top-4 self-start">
+        <button v-for="group in brailleGroups" :key="group.id" @click="scrollToGroup(group.id)"
+          class="px-3 py-2 text-sm rounded-lg text-left transition-all whitespace-nowrap"
+          :class="activeGroup === group.id 
+            ? 'bg-purple-500 text-white font-bold shadow-lg shadow-purple-500/30' 
+            : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200'">
+          {{ group.label }}
+        </button>
       </div>
     </div>
 
@@ -96,19 +118,56 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, nextTick } from 'vue'
 import { useBrailleStore } from './store/braille'
-import { BRAILLE_MAP } from './utils/braille'
+import { BRAILLE_MAP, BRAILLE_GROUPS } from './utils/braille'
 import BrailleCell from './components/BrailleCell.vue'
 
 const store = useBrailleStore()
 const brailleMap = BRAILLE_MAP
+const brailleGroups = BRAILLE_GROUPS
 const tabs = [
   { id: 'translate', label: '翻译模式' },
   { id: 'learn', label: '训练模式' },
   { id: 'ref', label: '速查表' },
 ]
 const activeTab = ref('translate')
+const scrollContainer = ref<HTMLElement | null>(null)
+const activeGroup = ref('aj')
+
+function onScroll() {
+  if (!scrollContainer.value) return
+  const container = scrollContainer.value
+  const scrollTop = container.scrollTop
+  const containerTop = container.getBoundingClientRect().top
+
+  let currentGroup = brailleGroups[0].id
+  for (const group of brailleGroups) {
+    const el = document.getElementById('group-' + group.id)
+    if (!el) continue
+    const rect = el.getBoundingClientRect()
+    const relativeTop = rect.top - containerTop
+    if (relativeTop <= 60) {
+      currentGroup = group.id
+    }
+  }
+  activeGroup.value = currentGroup
+}
+
+async function scrollToGroup(groupId: string) {
+  await nextTick()
+  const el = document.getElementById('group-' + groupId)
+  if (el && scrollContainer.value) {
+    const container = scrollContainer.value
+    const containerTop = container.getBoundingClientRect().top
+    const elTop = el.getBoundingClientRect().top
+    container.scrollBy({
+      top: elTop - containerTop,
+      behavior: 'smooth'
+    })
+    activeGroup.value = groupId
+  }
+}
 
 function doExport() {
   const text = store.exportPDF()
